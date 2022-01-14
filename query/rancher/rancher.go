@@ -3,10 +3,11 @@ package rancher
 import (
 	"context"
 	"github.com/ebauman/prometheus-rancher-exporter/semver"
-	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
 var (
@@ -14,19 +15,21 @@ var (
 )
 
 type Client struct {
-	client dynamic.Interface
+	Client dynamic.Interface
+	Config *rest.Config
 }
 
 func (r Client) GetRancherVersion() (map[string]int64, error) {
-	res, err := r.client.Resource(settingGVR).Get(context.Background(), "server-version", v1.GetOptions{})
+
+	res, err := r.Client.Resource(settingGVR).Get(context.Background(), "server-version", v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	
+	version, _, _ := unstructured.NestedString(res.UnstructuredContent(), "value")
 
-	// major, minor, patch, prerelease, buildmetadata
-	result, err := semver.Parse(setting.Value)
+	result, err := semver.Parse(TrimVersionChar(version))
+
 	if err != nil {
 		return nil, err
 	}
@@ -34,3 +37,12 @@ func (r Client) GetRancherVersion() (map[string]int64, error) {
 	return result, nil
 }
 
+// Version returned from CRD is in the format of "v.N.N.N", trim the leading "v"
+func TrimVersionChar(version string) string {
+	for i := range version {
+		if i > 0 {
+			return version[i:]
+		}
+	}
+	return version[:0]
+}
