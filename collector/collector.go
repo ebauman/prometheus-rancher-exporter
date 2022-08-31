@@ -119,6 +119,25 @@ func new() metrics {
 
 func Collect(client rancher.Client) {
 	m := new()
+
+	// Github API request limits necessitate polling at a different interval
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+
+		for range ticker.C {
+			latestVers, err := client.GetLatestRancherVersion()
+
+			if err != nil {
+				log.Errorf("error retrieving latest Rancher version: %v", err)
+			}
+
+			m.rancherLatestMajorVersion.Set(float64(latestVers["major"]))
+			m.rancherLatestMinorVersion.Set(float64(latestVers["minor"]))
+			m.rancherLatestPatchVersion.Set(float64(latestVers["patch"]))
+
+		}
+	}()
+
 	ticker := time.NewTicker(3 * time.Second)
 
 	for range ticker.C {
@@ -142,12 +161,6 @@ func Collect(client rancher.Client) {
 			log.Errorf("error retrieving number of managed clusters: %v", err)
 		}
 
-		latestVers, err := client.GetLatestRancherVersion()
-
-		if err != nil {
-			log.Errorf("error retrieving latest Rancher version: %v", err)
-		}
-
 		numberOfNodes, err := client.GetNumberOfManagedNodes()
 
 		if err != nil {
@@ -157,10 +170,6 @@ func Collect(client rancher.Client) {
 		m.rancherMajorVersion.Set(float64(vers["major"]))
 		m.rancherMinorVersion.Set(float64(vers["minor"]))
 		m.rancherPatchVersion.Set(float64(vers["patch"]))
-
-		m.rancherLatestMajorVersion.Set(float64(latestVers["major"]))
-		m.rancherLatestMinorVersion.Set(float64(latestVers["minor"]))
-		m.rancherLatestPatchVersion.Set(float64(latestVers["patch"]))
 
 		m.managedClusterCount.Set(float64(numberOfClusters))
 		m.managedNodeCount.Set(float64(numberOfNodes))
